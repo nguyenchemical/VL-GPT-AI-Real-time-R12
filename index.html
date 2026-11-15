@@ -11,8 +11,8 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Grok AI Real-time">
-<meta name="application-name" content="Grok AI Real-time">
+<meta name="apple-mobile-web-app-title" content="GPT Real-time">
+<meta name="application-name" content="GPT Real-time">
 <link id="pwa-manifest-link" rel="manifest" href="manifest.json">
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600&family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.10.0/dist/tf.min.js"></script>
@@ -248,12 +248,15 @@ body.light .meter{background:rgba(0,0,0,.04);border-color:rgba(0,0,0,.06);}
 .pbg{height:4px;border-radius:50px;background:rgba(255,255,255,.1);margin:3px 0;overflow:hidden;}
 .pfill{height:100%;width:0%;background:linear-gradient(90deg,#ef4444,#fbbf24,#34d399);transition:width .12s;}
 .log{
-  padding:6px 8px;border-radius:8px;background:rgba(0,0,0,.35);
-  font-family:ui-monospace,Menlo,monospace;font-size:.58rem;text-align:left;
-  min-height:52px;max-height:88px;overflow-y:auto;-webkit-overflow-scrolling:touch;
-  line-height:1.4;margin:3px 0;color:#cbd5e1;
-  border:1px solid rgba(251,191,36,.15);flex-shrink:1;
+  padding:7px 9px;border-radius:8px;background:rgba(0,0,0,.35);
+  font-family:ui-monospace,Menlo,monospace;font-size:.64rem;text-align:left;
+  min-height:5.5em;max-height:none;flex:1 1 auto;min-width:0;
+  overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;
+  line-height:1.5;margin:3px 0;color:#cbd5e1;
+  border:1px solid rgba(251,191,36,.15);
 }
+/* Ẩn phần trình bày bộ số dự đoán để dành diện tích cho log; toàn bộ AI/model và xử lý dự đoán vẫn hoạt động. */
+#predictionsList,#resultGameLabel,#resultArea,#scanArea{display:none!important;}
 
 body.light .log{background:rgba(0,0,0,.04);color:#475569;border-color:rgba(0,0,0,.08);}
 .log b{color:#34d399;}
