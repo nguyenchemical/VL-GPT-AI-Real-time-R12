@@ -255,8 +255,16 @@ body.light .meter{background:rgba(0,0,0,.04);border-color:rgba(0,0,0,.06);}
   line-height:1.5;margin:3px 0;color:#cbd5e1;
   border:1px solid rgba(251,191,36,.15);
 }
-/* Ẩn phần trình bày bộ số dự đoán để dành diện tích cho log; toàn bộ AI/model và xử lý dự đoán vẫn hoạt động. */
-#predictionsList,#resultGameLabel,#resultArea,#scanArea{display:none!important;}
+/* Khôi phục bảng bộ số; log và danh sách kết quả cuộn độc lập trong vùng ứng dụng. */
+#predictionsList{display:block!important;}
+#resultGameLabel,#resultArea,#scanArea{display:block!important;}
+.jackpot-status{display:none;margin-top:4px;padding:4px 6px;border-radius:7px;background:rgba(251,191,36,.07);border:1px solid rgba(251,191,36,.16);font-size:.58rem;text-align:left;}
+.jackpot-status.show{display:block;}
+.jackpot-line{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;padding:2px 0;border-bottom:1px solid rgba(255,255,255,.06);}
+.jackpot-line:last-child{border-bottom:0;}
+.jackpot-line b{color:#fbbf24;}
+.jackpot-meta{opacity:.68;font-size:.52rem;}
+.jackpot-error{color:#f87171;}
 
 body.light .log{background:rgba(0,0,0,.04);color:#475569;border-color:rgba(0,0,0,.08);}
 .log b{color:#34d399;}
@@ -310,7 +318,9 @@ body.light .set-row{background:rgba(0,0,0,.04);}
     <div class="lp-row">
       <button type="button" class="g mini" onclick="refreshPublicData(true)">↻ Data công khai</button>
       <button type="button" class="g mini" onclick="initLive()">↻ Live KV</button>
+      <button type="button" class="g mini" onclick="refreshJackpotStatus(true)">↻ Jackpot</button>
     </div>
+    <div id="jackpotStatus" class="jackpot-status" aria-live="polite"></div>
   </div>
 
   <div class="sec tf-zone grow">
@@ -1029,6 +1039,7 @@ async function refreshPublicData(manual){
     }catch(e){}
     var r=resolveAlgo(gameType);
     renderAlgoHint(gameType);
+    refreshJackpotStatus(false);
   }catch(e){
     lastLiveError=e.message||String(e);
     setLiveStatus(false, "Public lỗi", true);
@@ -1163,6 +1174,46 @@ function onManualAlgoChange(){
   algoManualOverride=manualAlgoChoice!=="auto";
   renderAlgoHint(document.getElementById("gameTypeTf").value||currentGame);
 }
+function formatVnd(value){
+  var n=Number(value); return Number.isFinite(n)&&n>0?n.toLocaleString("vi-VN")+" đ":"Chưa có dữ liệu";
+}
+function renderJackpotStatus(data){
+  var box=document.getElementById("jackpotStatus"); if(!box)return;
+  var game=document.getElementById("gameTypeTf").value;
+  if(["mega645","power655","lotto535"].indexOf(game)<0){box.classList.remove("show");box.innerHTML="";return;}
+  var rows=[];
+  function row(label,item){
+    item=item||{};
+    var draw=item.drawId?"Kỳ #"+String(item.drawId).padStart(5,"0"):"Kỳ chưa xác định";
+    var updated=item.updatedAt?new Date(item.updatedAt).toLocaleString("vi-VN"):"chưa rõ giờ cập nhật";
+    var appLatest=rawDraws&&rawDraws[0]&&String(rawDraws[0].id||"").replace(/\D/g,"");
+    var mismatch=item.latestDrawId&&appLatest&&String(item.latestDrawId)!==String(appLatest);
+    rows.push('<div class="jackpot-line"><span><b>'+label+':</b> '+formatVnd(item.amount)+'</span><span>'+draw+(mismatch?' <b class="jackpot-error">⚠ lệch kỳ</b>':'')+'</span><span class="jackpot-meta">Cập nhật: '+updated+'</span></div>');
+  }
+  if(game==="mega645")row("💰 Mega 6/45",data&&data.mega645);
+  if(game==="power655") {row("💰 Power Jackpot 1",data&&data.power655&&data.power655.jackpot1);row("💰 Power Jackpot 2",data&&data.power655&&data.power655.jackpot2);}
+  if(game==="lotto535")row("💰 Lotto 5/35",data&&data.lotto535);
+  if(!data||data.ok===false)rows.push('<div class="jackpot-meta jackpot-error">Không lấy được dữ liệu Jackpot từ Vietlott: '+((data&&data.error)||"chưa kết nối")+'</div>');
+  box.innerHTML=rows.join("");box.classList.add("show");
+}
+var jackpotRefreshBusy=false;
+async function refreshJackpotStatus(manual){
+  if(jackpotRefreshBusy)return;
+  var game=document.getElementById("gameTypeTf")?.value||currentGame;
+  if(["mega645","power655","lotto535"].indexOf(game)<0){renderJackpotStatus(null);return;}
+  jackpotRefreshBusy=true;
+  var box=document.getElementById("jackpotStatus");
+  if(box){box.classList.add("show");if(manual)box.textContent="Đang lấy Jackpot trực tiếp từ Vietlott.vn…";}
+  try{
+    var ctrl=new AbortController(),timer=setTimeout(function(){ctrl.abort();},15000);
+    var response=await fetch(WORKER_BASE+"?action=jackpot&t="+Date.now(),{cache:"no-store",signal:ctrl.signal});clearTimeout(timer);
+    var data=await response.json();
+    if(!response.ok||!data.ok)throw new Error(data.error||("HTTP "+response.status));
+    renderJackpotStatus(data);
+    if(manual)logTrain("<b>[Jackpot]</b> Đã cập nhật giá trị Jackpot từ Vietlott.vn · "+new Date(data.fetchedAt||Date.now()).toLocaleTimeString("vi-VN"));
+  }catch(e){renderJackpotStatus({ok:false,error:e.name==="AbortError"?"Quá thời gian chờ":""+(e.message||e)});if(manual)logTrain("<b style=\"color:#f87171\">[Jackpot lỗi]</b> "+(e.message||e));}
+  finally{jackpotRefreshBusy=false;}
+}
 function onGameChange(){
   algoManualOverride=false; manualAlgoChoice="auto";
   var ms=document.getElementById("manualAlgoSelect"); if(ms)ms.value="auto";
@@ -1173,7 +1224,9 @@ function onGameChange(){
   setResultLabel(gt,"ai");
   renderAlgoHint(gt);
   updateNextDrawStatus();
+  renderJackpotStatus(null);
   initLive();
+  refreshJackpotStatus(false);
 }
 function logTrain(html){var el=document.getElementById("trainLog");el.innerHTML=html+"<br>"+el.innerHTML}
 function clearTrainLog(){document.getElementById("trainLog").innerHTML=""}
@@ -1181,6 +1234,7 @@ function clearTrainLog(){document.getElementById("trainLog").innerHTML=""}
 async function trainAndPredict(){
   var btn=document.getElementById("btnTrain"),progress=document.getElementById("trainProgress");
   var gameType=document.getElementById("gameTypeTf").value; currentGame=gameType;
+  if(["mega645","power655","lotto535"].indexOf(gameType)>=0){logTrain("<b>[Jackpot]</b> Đang kiểm tra Jackpot kỳ hiện tại…");refreshJackpotStatus(true);}
 
   if(!rawDraws||rawDraws.length<1){
     logTrain("<b style='color:#f87171'>[Lỗi]</b> Không có dữ liệu thật. Đang thử kết nối Live…");
@@ -1205,10 +1259,12 @@ async function trainAndPredict(){
   progress.style.width="8%";
   logTrain("<b>[Init]</b> "+algoType+" · "+rawDraws.length+" kỳ THẬT");
   try{
-  if(window.tf) await tf.nextFrame();
+  if(window.tf){ await tf.ready(); await tf.nextFrame(); }
 
-  // Giới hạn 100 kỳ gần nhất khi train TF — tránh treo mobile với 400 kỳ
-  var trainDraws=rawDraws.slice(0, Math.min(rawDraws.length, 100));
+  // Giới hạn cửa sổ huấn luyện để giảm áp lực RAM/CPU trên điện thoại.
+  var isMobileTrain=/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)||Math.min(screen.width,screen.height)<600;
+  var trainLimit=isMobileTrain?48:80;
+  var trainDraws=rawDraws.slice(0, Math.min(rawDraws.length, trainLimit));
   var chronological=trainDraws.slice().reverse();
   logTrain("<b>[Data]</b> Dùng "+chronological.length+"/"+rawDraws.length+" kỳ gần nhất để train");
   var vectors=chronological.map(function(d){
@@ -1279,8 +1335,9 @@ async function trainAndPredict(){
     } else logTrain("<b>[Freq]</b> Tần suất lịch sử thật");
     progress.style.width="85%";
   } else if(window.tf&&(algoType==="tf-dense"||algoType==="tf-lstm")){
-    var epochs=algoType==="tf-lstm"?8:6;
-    var timesteps=Math.min(4,Math.max(1,vectors.length-1));
+    var epochs=algoType==="tf-lstm"?(isMobileTrain?3:5):(isMobileTrain?3:4);
+    var units=isMobileTrain?16:24;
+    var timesteps=Math.min(3,Math.max(1,vectors.length-1));
     var useLstm=algoType==="tf-lstm"&&vectors.length>timesteps+2;
     var xs,ys,model;
     if(useLstm){
@@ -1288,33 +1345,37 @@ async function trainAndPredict(){
       for(var i=0;i<=vectors.length-timesteps-1;i++){seqIn.push(vectors.slice(i,i+timesteps));seqLab.push(vectors[i+timesteps])}
       xs=tf.tensor3d(seqIn); ys=tf.tensor2d(seqLab);
       model=tf.sequential();
-      model.add(tf.layers.lstm({units:48,inputShape:[timesteps,featureSize],returnSequences:false}));
-      model.add(tf.layers.dropout({rate:0.25}));
-      model.add(tf.layers.dense({units:32,activation:"relu"}));
+      model.add(tf.layers.lstm({units:units,inputShape:[timesteps,featureSize],returnSequences:false}));
+      model.add(tf.layers.dropout({rate:0.15}));
+      model.add(tf.layers.dense({units:Math.max(12,units),activation:"relu"}));
       model.add(tf.layers.dense({units:featureSize,activation:"sigmoid"}));
       logTrain("<b>[LSTM]</b> Huấn luyện trên "+rawDraws.length+" kỳ thật");
     } else {
       xs=tf.tensor2d(vectors.slice(0,-1)); ys=tf.tensor2d(vectors.slice(1));
       model=tf.sequential();
-      model.add(tf.layers.dense({units:96,activation:"relu",inputShape:[featureSize]}));
-      model.add(tf.layers.dropout({rate:0.25}));
-      model.add(tf.layers.dense({units:48,activation:"relu"}));
+      model.add(tf.layers.dense({units:units*2,activation:"relu",inputShape:[featureSize]}));
+      model.add(tf.layers.dropout({rate:0.15}));
+      model.add(tf.layers.dense({units:units,activation:"relu"}));
       model.add(tf.layers.dense({units:featureSize,activation:"sigmoid"}));
       logTrain("<b>[Dense]</b> 96→48→"+featureSize+" · data thật");
     }
     model.compile({optimizer:tf.train.adam(0.01),loss:"binaryCrossentropy"});
     progress.style.width="25%";
-    await model.fit(xs,ys,{epochs:epochs,batchSize:Math.min(16,xs.shape[0]),shuffle:false,callbacks:{onEpochEnd:async function(epoch,logs){
-      progress.style.width=Math.floor(25+((epoch+1)/epochs)*60)+"%";
-      logTrain("Epoch <b>"+(epoch+1)+"/"+epochs+"</b> loss:<b>"+(logs.loss!=null?logs.loss.toFixed(4):"—")+"</b>");
+    try {
+      await model.fit(xs,ys,{epochs:epochs,batchSize:Math.min(isMobileTrain?8:12,xs.shape[0]),shuffle:false,callbacks:{onEpochEnd:async function(epoch,logs){
+        progress.style.width=Math.floor(25+((epoch+1)/epochs)*60)+"%";
+        logTrain("Epoch <b>"+(epoch+1)+"/"+epochs+"</b> loss:<b>"+(logs.loss!=null?logs.loss.toFixed(4):"—")+"</b>");
+        await tf.nextFrame();
+      }}});
+      progress.style.width="95%";
+      predictionData=tf.tidy(function(){
+        var input=useLstm?tf.tensor3d([vectors.slice(vectors.length-timesteps)]):tf.tensor2d([vectors[vectors.length-1]]);
+        return model.predict(input).dataSync().slice();
+      });
+    } finally {
+      if(xs) xs.dispose(); if(ys) ys.dispose(); if(model) model.dispose();
       await tf.nextFrame();
-    }}});
-    progress.style.width="95%";
-    predictionData=tf.tidy(function(){
-      var input=useLstm?tf.tensor3d([vectors.slice(vectors.length-timesteps)]):tf.tensor2d([vectors[vectors.length-1]]);
-      return model.predict(input).dataSync().slice();
-    });
-    xs.dispose();ys.dispose();model.dispose();
+    }
   } else {
     predictionData=buildFreqProbs(gameType);
     logTrain("<b>[Freq]</b> Tần suất thật (TF chưa sẵn sàng)");
@@ -1491,6 +1552,7 @@ window.onload=function(){
   var qel=document.getElementById("predictQtyVal");
   if(qel) qel.textContent=String(predictQty);
   initLive().then(function(){
+    refreshJackpotStatus(false);
     // Tự tải public nếu KV < 15 kỳ
     if(!rawDraws||rawDraws.length<15){
       logTrain("<b>[Auto]</b> KV mỏng → tải data công khai…");
