@@ -3,11 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<title>Vietlott GPT AI Real-time</title>
+<title>Vietlott GPT AI Real-time R14</title>
 <link rel="icon" type="image/png" href="icon.png">
 <link rel="apple-touch-icon" href="icon.png">
 <link rel="apple-touch-icon" sizes="180x180" href="icon.png">
-<meta name="theme-color" content="#141e30">
+<meta name="theme-color" content="#D72035">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -19,6 +19,8 @@
 <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
 <style>
 :root{
+  --brand-red:#D72035;
+  --brand-red-light:#EE5255;
   --bg-dark:linear-gradient(160deg,#0f172a 0%,#1e293b 50%,#243b55 100%);
   --bg-light:linear-gradient(160deg,#f8fafc,#e2e8f0);
   --card-d:#1a2332; --card-l:#fff;
@@ -52,7 +54,7 @@ body.light .hdr{background:rgba(255,255,255,.96);border-bottom-color:rgba(0,0,0,
 @media(min-width:400px){.logo{width:46px;height:46px;}}
 .logo-t h1{
   font-family:'Playfair Display',serif;font-size:.82rem;margin:0;
-  background:linear-gradient(90deg,#ef4444,#fbbf24,#34d399);
+  background:linear-gradient(90deg,var(--brand-red),#fbbf24,#34d399);
   -webkit-background-clip:text;background-clip:text;color:transparent;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
 }
@@ -246,7 +248,7 @@ body.light .meter{background:rgba(0,0,0,.04);border-color:rgba(0,0,0,.06);}
 .tf-zone{text-align:center;}
 .hint{font-size:.6rem;opacity:.65;margin:2px 0;}
 .pbg{height:4px;border-radius:50px;background:rgba(255,255,255,.1);margin:3px 0;overflow:hidden;}
-.pfill{height:100%;width:0%;background:linear-gradient(90deg,#ef4444,#fbbf24,#34d399);transition:width .12s;}
+.pfill{height:100%;width:0%;background:linear-gradient(90deg,var(--brand-red),#fbbf24,#34d399);transition:width .12s;}
 .log{
   padding:7px 9px;border-radius:8px;background:rgba(0,0,0,.35);
   font-family:ui-monospace,Menlo,monospace;font-size:.64rem;text-align:left;
@@ -279,6 +281,9 @@ body.light .set-row{background:rgba(0,0,0,.04);}
 
 .btns{text-align:center;line-height:1.1;}
 .game-label{font-size:.58rem;opacity:.7;margin-bottom:2px;text-align:center;}
+
+/* Chế độ giao diện gọn: AI vẫn phân tích/huấn luyện/sinh số nội bộ, nhưng không chiếm chỗ bằng bảng số dự đoán. */
+#predictionsList, #resultArea, #scanArea, #resultGameLabel { display:none !important; }
 </style>
 </head>
 <body>
@@ -1188,13 +1193,18 @@ function renderJackpotStatus(data){
     var updated=item.updatedAt?new Date(item.updatedAt).toLocaleString("vi-VN"):"chưa rõ giờ cập nhật";
     var appLatest=rawDraws&&rawDraws[0]&&String(rawDraws[0].id||"").replace(/\D/g,"");
     var mismatch=item.latestDrawId&&appLatest&&String(item.latestDrawId)!==String(appLatest);
-    rows.push('<div class="jackpot-line"><span><b>'+label+':</b> '+formatVnd(item.amount)+'</span><span>'+draw+(mismatch?' <b class="jackpot-error">⚠ lệch kỳ</b>':'')+'</span><span class="jackpot-meta">Cập nhật: '+updated+'</span></div>');
+    var amountText=(Number.isFinite(Number(item.amount))&&Number(item.amount)>0)?formatVnd(Number(item.amount)):'Chưa đọc được từ Vietlott';
+    var errorText=item.idError?(' · '+item.idError):'';
+    rows.push('<div class="jackpot-line"><span><b>'+label+':</b> '+amountText+'</span><span>'+draw+(mismatch?' <b class="jackpot-error">⚠ lệch kỳ</b>':'')+'</span><span class="jackpot-meta">Cập nhật: '+updated+errorText+'</span></div>');
   }
   if(game==="mega645")row("💰 Mega 6/45",data&&data.mega645);
   if(game==="power655") {row("💰 Power Jackpot 1",data&&data.power655&&data.power655.jackpot1);row("💰 Power Jackpot 2",data&&data.power655&&data.power655.jackpot2);}
   if(game==="lotto535")row("💰 Lotto 5/35",data&&data.lotto535);
   if(!data||data.ok===false)rows.push('<div class="jackpot-meta jackpot-error">Không lấy được dữ liệu Jackpot từ Vietlott: '+((data&&data.error)||"chưa kết nối")+'</div>');
+  else if(Array.isArray(data.errors)&&data.errors.length) rows.push('<div class="jackpot-meta jackpot-error">Một số trang Vietlott chưa phản hồi: '+data.errors.map(function(e){return e.game+": "+e.error;}).join(" · ")+'</div>');
   box.innerHTML=rows.join("");box.classList.add("show");
+  var currentItem=game==="mega645"?data&&data.mega645:game==="lotto535"?data&&data.lotto535:game==="power655"?data&&data.power655&&data.power655.jackpot1:null;
+  if(currentItem&&Number(currentItem.amount)>0){lastRealJackpotBillion=Number(currentItem.amount)/1e9;var jv=document.getElementById("jackpotVal");if(jv)jv.textContent=lastRealJackpotBillion.toFixed(2)+" tỷ";}
 }
 var jackpotRefreshBusy=false;
 async function refreshJackpotStatus(manual){
